@@ -23,13 +23,14 @@
 #include "psem.h"       // Portable semaphores API for Linux and macOS.
 
 #define ITERATIONS      5   // Number of iterations each thread will execute. 
-#define MAX_SLEEP_TIME  3   // Max sleep time (seconds) for each thread. 
+#define MAX_SLEEP_TIME  1   // Max sleep time (seconds) for each thread. 
 
 /**
  *  Declare global semaphore variables. Note, they must be initialized, for 
  *  example in main() before use. 
  */
-psem_t *sem; 
+psem_t *sem_A;
+psem_t *sem_B;  
 
 /**
  * next()
@@ -97,6 +98,8 @@ void *threadA(void *param __attribute__((unused))) {
     int i;
 
     for (i = 0; i < ITERATIONS; i++) {
+        psem_signal(sem_A);
+        psem_wait(sem_B);
         trace('A');
         sleep(rand() % MAX_SLEEP_TIME);
     }
@@ -119,8 +122,11 @@ void *threadB(void *param  __attribute__((unused))) {
     int i;
 
     for (i = 0; i < ITERATIONS; i++) {
+        psem_signal(sem_B);
+        psem_wait(sem_A);
         trace('B');
         sleep(rand() % MAX_SLEEP_TIME);
+        //sleep(MAX_SLEEP_TIME);
     }
 
     pthread_exit(0);
@@ -144,7 +150,8 @@ int main() {
      * Todo: Initialize semaphores.
      */
 
-    sem = psem_init(666);
+    sem_A = psem_init(0);
+    sem_B = psem_init(0);
     
     srand(time(NULL));
     pthread_setconcurrency(3);
@@ -166,7 +173,8 @@ int main() {
      * Todo: Destroy semaphores.
      */
 
-    psem_destroy(sem);
+    psem_destroy(sem_A);
+    psem_destroy(sem_B);
 
     return 0;
 }
