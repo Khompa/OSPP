@@ -20,7 +20,7 @@
 #else
 #error No suitable clock type found.
 #endif
-
+//test test
 static void
 checked_gettime(struct timespec *ts)
 {

@@ -11,7 +11,6 @@
 #include <pthread.h>        // pthread_...
 
 void buffer_init(buffer_t *buffer, int size) {
-
   // Allocate the buffer array.
   tuple_t *array = malloc(size*sizeof(tuple_t));
 
@@ -19,7 +18,6 @@ void buffer_init(buffer_t *buffer, int size) {
     perror("Could not allocate buffer array");
     exit(EXIT_FAILURE);
  }
-
   // Initialize the binary mutex semaphore.
   buffer->mutex = psem_init(1);
 
