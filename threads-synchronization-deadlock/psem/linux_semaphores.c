@@ -32,4 +32,5 @@ void psem_destroy(psem_t *sem) {
     perror("Destroying semaphore failed");
     abort();
   }
+  free(sem);
 }
