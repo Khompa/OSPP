@@ -42,15 +42,13 @@ void buffer_destroy(buffer_t *buffer) {
 
   // TODO: Deallocate any other resources allocated to the bounded buffer.
   psem_destroy(buffer->data);
-  buffer->data = NULL;
+  buffer->data = NULL; 
   psem_destroy(buffer->empty);
   buffer->empty = NULL;
-    
-  buffer->in = NULL;
-  buffer->out = NULL;
-  buffer->size = NULL;
-  free(buffer->array);
-  buffer->array = NULL;
+   
+  buffer->in = -1; 
+  buffer->out = -1;
+  buffer->size = -1;
 }
 
 void buffer_print(buffer_t *buffer) {
