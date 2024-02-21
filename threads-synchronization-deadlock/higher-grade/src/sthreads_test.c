@@ -20,7 +20,7 @@ void numbers() {
     n = (n + 1) % (INT_MAX);
     if (n > 3) done();
     yield();
-  }
+  } 
 }
 
 /* Prints the sequence a, b, c, ..., z over and over again.
@@ -130,4 +130,11 @@ int main(){
   puts("\n==== Test program for the Simple Threads API ====\n");
 
   init(); // Initialization
+  spawn(numbers);
+  yield();
+
+  /* Transfers control to the foo context. */
+  setcontext(&foo_ctx);
+  
+  fprintf(stderr, "ERROR! A successful call to setcontext() does not return!\n");
 }

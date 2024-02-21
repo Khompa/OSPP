@@ -11,6 +11,7 @@
  * First version by Karl Marklund <karl.markund@it.uu.se>.
  *
  */
+#define _GNU_SOURCE
 
 #include <stdio.h>     // printf()
 #include <stdlib.h>    // abort(), srand(), rand()

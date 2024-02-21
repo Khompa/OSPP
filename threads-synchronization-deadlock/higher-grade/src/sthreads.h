@@ -48,7 +48,7 @@ new functions to the API.
 
    Returns 1 on success and a negative value on failure.
 */
-int init();
+int init(); 
 
 /* Creates a new thread executing the start function.
 

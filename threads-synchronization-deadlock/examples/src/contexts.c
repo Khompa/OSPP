@@ -106,7 +106,7 @@ void init_context1(ucontext_t *ctx, void (*func)(), const char *str, ucontext_t 
  */
 void link_context(ucontext_t *a, ucontext_t *b) {
   a->uc_link = b;
-}
+} 
 
 int main() {
   ucontext_t foo_done_ctx;
