@@ -127,15 +127,17 @@ void magic_numbers() {
 
 int main(){
   puts("\n==== Test program for the Simple Threads API ====\n");
-  ucontext_t first_ctx; 
+  ucontext_t numbers_ctx;
+  ucontext_t letters_ctx; 
+
   init(); // Initialization
-  spawn(numbers, &first_ctx);
-  //spawn(letters, &first_ctx);
+  spawn(numbers, &numbers_ctx, &letters_ctx);
+  spawn(letters, &letters_ctx, NULL);
 
   
   /* Transfers control to the foo context. */
 
-  setcontext(&first_ctx);
+  setcontext(&numbers_ctx);
   
   fprintf(stderr, "ERROR! A successful call to setcontext() does not return!\n");
 }

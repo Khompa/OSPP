@@ -58,7 +58,7 @@ int init();
    On success the positive thread ID of the new thread is returned. On failure a
    negative value is returned.
 */
-tid_t spawn(void (*start)(), ucontext_t *ctx);
+tid_t spawn(void (*start)(), ucontext_t *ctx, ucontext_t *next);
 
 /* Cooperative scheduling
 
