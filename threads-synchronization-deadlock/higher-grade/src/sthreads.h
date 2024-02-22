@@ -17,6 +17,7 @@ typedef enum {running, ready, waiting, terminated} state_t;
 
 /* Thread ID. */
 typedef int tid_t;
+typedef struct list list_t;
 
 typedef struct thread thread_t;
 
@@ -57,7 +58,7 @@ int init();
    On success the positive thread ID of the new thread is returned. On failure a
    negative value is returned.
 */
-tid_t spawn(void (*start)());
+tid_t spawn(void (*start)(), ucontext_t *ctx);
 
 /* Cooperative scheduling
 

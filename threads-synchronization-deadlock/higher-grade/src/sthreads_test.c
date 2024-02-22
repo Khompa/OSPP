@@ -125,16 +125,17 @@ void magic_numbers() {
             Here you should add code to test the Simple Threads API.
 ********************************************************************************/
 
-
 int main(){
   puts("\n==== Test program for the Simple Threads API ====\n");
-
+  ucontext_t first_ctx; 
   init(); // Initialization
-  spawn(numbers);
-  yield();
+  spawn(numbers, &first_ctx);
+  //spawn(letters, &first_ctx);
 
+  
   /* Transfers control to the foo context. */
-  setcontext(&foo_ctx);
+
+  setcontext(&first_ctx);
   
   fprintf(stderr, "ERROR! A successful call to setcontext() does not return!\n");
 }

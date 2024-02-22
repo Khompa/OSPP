@@ -1,5 +1,5 @@
 DEBUG   := n
-CC      := gcc
+CC      := gcc -g
 OS      := $(shell uname)
 CFLAGS  := -std=gnu99 -Werror -Wall  -Wno-deprecated-declarations -I ../psem
 LDFLAGS :=
