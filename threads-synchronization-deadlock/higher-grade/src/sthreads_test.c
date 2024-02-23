@@ -126,6 +126,8 @@ void magic_numbers() {
 ********************************************************************************/
 
 int main(){
+  setvbuf(stdout, 0, _IOLBF, 0);
+  
   puts("\n==== Test program for the Simple Threads API ====\n");
   ucontext_t numbers_ctx;
   ucontext_t letters_ctx; 

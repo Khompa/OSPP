@@ -1,7 +1,7 @@
 /* On Mac OS (aka OS X) the ucontext.h functions are deprecated and requires the
    following define.
 */
-#define _XOPEN_SOURCE 700
+#define _XOPEN_SOURCE 700 
 
 /* On Mac OS when compiling with gcc (clang) the -Wno-deprecated-declarations
    flag must also be used to suppress compiler warnings.
@@ -36,6 +36,7 @@ struct list {
   size_t size;
 };
 
+
 list_t thread_list;
 
 /*******************************************************************************
@@ -45,20 +46,12 @@ list_t thread_list;
 ********************************************************************************/
 
 void finale() {
-  printf("NO MORE ITS OVER :DDDD \n");
+  printf("-------- its over :D ---------\n");
 }
 
 /*******************************************************************************
                     Implementation of the Simple Threads API
 ********************************************************************************/
-
-/*
-ucontext.h
-getcontext()
-setcontext()
-makecontext()
-swapcontext()
-*/
 
 int  init() {
   // reset thread id counter 
@@ -66,33 +59,11 @@ int  init() {
     puts("ERROROROROROR");
   }
   tid_global = 0;
+  
+  thread_list.first_in_line = NULL;
+  thread_list.last_in_line = NULL;
+  thread_list.size = 0; 
 
-
-  (&thread_list)->first_in_line = NULL;
-  (&thread_list)->last_in_line = NULL;
-  (&thread_list)->size = 0;
-
-  /*
-  // Initialize main context 
-  void *stack = malloc(STACK_SIZE);
-
-  if (stack == NULL) {
-    perror("Allocating stack");
-    exit(-1);
-  }
-
-  if (getcontext(&main_ctx) < 0) {
-    perror("getcontext");
-    exit(-1);
-  }
-  (&main_ctx)->uc_link           = NULL;
-  (&main_ctx)->uc_stack.ss_sp    = stack;
-  (&main_ctx)->uc_stack.ss_size  = STACK_SIZE;
-  (&main_ctx)->uc_stack.ss_flags = 0;
-
-  //(&thread_list)->last_in_line -> ctx  = main_ctx; 
-  makecontext(&main_ctx, finale, 0);
-  */
 
   return 1;
 }
@@ -104,7 +75,6 @@ struct thread
   ucontext_t ctx; 
   thread_t *next; can use this to create a linked list of threads 
 */
-
 
 tid_t spawn(void (*start)(), ucontext_t *ctx, ucontext_t *next){  
   //CREATE NEW CONTEXT
@@ -130,51 +100,86 @@ tid_t spawn(void (*start)(), ucontext_t *ctx, ucontext_t *next){
   thread_t *thread = malloc(sizeof(thread_t));
   thread -> tid = tid_global ++;
   thread -> state = ready;
-  thread -> ctx = *ctx;
+  thread -> ctx = ctx;
 
   //UPDATE LIST
-  if ((&thread_list)->size == 0) {
-    (&thread_list)->first_in_line = thread;
+  if (thread_list.size == 0) {
+    thread_list.first_in_line = thread;
     thread -> state = running;
   }
   if ((&thread_list)->size > 0) {
-    (&thread_list)->last_in_line->next = thread;
+    thread_list.last_in_line->next = thread;
   }
-  (&thread_list)->size ++;
+  thread_list.size ++;
 
   //REPLACE LAST IN LINE WITH NEW THREAD
-  ((&thread_list)->last_in_line) = thread;
+  thread_list.last_in_line = thread;
 
-  //TODO
   makecontext(ctx, start, 0);
-  puts("made it to end of spawn :)"); 
+  //puts("made it to end of spawn :)"); 
   return thread -> tid;
 }  
 
 void yield(){
-  ucontext_t temp = (&thread_list)->first_in_line -> ctx;
+  // Remember current context
+  ucontext_t *temp = thread_list.first_in_line -> ctx;
+
   //Update state of current thread
-  ((&thread_list)->first_in_line)-> state = ready;
+  thread_list.first_in_line->state = ready;
   //Make last in line point to new last in line (currently first in line)
-  ((&thread_list)->last_in_line)->next = (&thread_list)->first_in_line; //  first/running thread is now last in line again
+  thread_list.last_in_line->ctx->uc_link = thread_list.first_in_line->ctx; //update uclink is last
+  
+  thread_list.last_in_line->next = thread_list.first_in_line; //  first/running thread is now last in line again
+
+  thread_list.last_in_line->ctx->uc_link = NULL; //update uclink in new last
   //Set first in line to be new last in line
-  ((&thread_list)->last_in_line) = (&thread_list)->first_in_line;
+  thread_list.last_in_line = thread_list.first_in_line;
   
   //Update state of next thread
-  ((&thread_list)->first_in_line) = (&thread_list)->first_in_line -> next;
-  ((&thread_list)->first_in_line) -> state = running;
-  
-  //ucontext_t ctx;
-  //getcontext(&ctx);
-  if (swapcontext(&temp, &(&thread_list)->first_in_line->ctx) < 0) {
+  thread_list.first_in_line = thread_list.first_in_line -> next;
+  thread_list.first_in_line -> state = running;
+  /*
+  while (thread_list.first_in_line->state != ready){
+    if (thread_list.first_in_line->next == NULL){
+        done();
+    }
+  }
+  */
+
+  if (swapcontext(temp, thread_list.first_in_line->ctx) < 0) {  //&temp, &(&thread_list)->first_in_line->ctx
     perror("swapcontext");
     exit(EXIT_FAILURE);
   }
-  puts("made it to yield :D"); 
+  //puts("made it to yield :D"); 
 }
 
 void  done(){
-  puts("something was DONE");
+  //puts("something was DONE");
+  //free stuff  
+
+  //Save thread id 
+
+  if (thread_list.size == 0){
+    ucontext_t finale_ctx; 
+    spawn(finale, &finale_ctx, NULL);
+    setcontext(&finale_ctx);
+  }
+  ucontext_t *temp = thread_list.first_in_line -> ctx;
+
+  //Update state of current thread
+  thread_list.first_in_line->state = terminated;
+
+  //Update state of next thread
+  thread_list.first_in_line = thread_list.first_in_line -> next;
+  thread_list.first_in_line -> state = running;
+
+  thread_list.size --;
+  
+  if (swapcontext(temp, thread_list.first_in_line->ctx) < 0) {  //&temp, &(&thread_list)->first_in_line->ctx
+    perror("swapcontext");
+    exit(EXIT_FAILURE);
+  }
+  //puts("made it to done :D"); 
 }
 
 tid_t join(tid_t thread) {

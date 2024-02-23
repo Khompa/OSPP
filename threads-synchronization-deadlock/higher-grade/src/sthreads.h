@@ -18,6 +18,8 @@ typedef enum {running, ready, waiting, terminated} state_t;
 /* Thread ID. */
 typedef int tid_t;
 typedef struct list list_t;
+typedef struct tid_list tid_list_t;
+typedef struct tid_link tid_link_t;
 
 typedef struct thread thread_t;
 
@@ -28,7 +30,7 @@ typedef struct thread thread_t;
 struct thread {
   tid_t tid;
   state_t state;
-  ucontext_t ctx;
+  ucontext_t *ctx;
   thread_t *next; /* can use this to create a linked list of threads */
 };
 
