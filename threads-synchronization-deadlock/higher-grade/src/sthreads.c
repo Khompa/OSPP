@@ -36,8 +36,21 @@ struct list {
   size_t size;
 };
 
+struct t_link {
+  tid_t id;
+  t_link_t *next;
+};
+
+struct t_list {
+  t_link_t *first;
+  t_link_t *last;
+  size_t size;
+};
+
 
 list_t thread_list;
+list_t waiting_list;
+t_list_t term_list;
 
 /*******************************************************************************
                              Auxiliary functions
@@ -48,6 +61,47 @@ list_t thread_list;
 void finale() {
   printf("-------- its over :D ---------\n");
 }
+
+void list_clear(list_t *list)
+{
+    thread_t *current = list->first_in_line;
+    while (current)
+    {
+        thread_t *tmp = current;
+        current = current->next;
+        free(tmp);
+        list->size--;
+    }
+    list->first_in_line->next = NULL;
+}
+
+void list_destroy(list_t *list)
+{
+    list_clear(list);
+    free(list->first_in_line);
+    free(list);
+}
+
+void term_list_clear(t_list_t *list)
+{
+    t_link_t *current = list->first;
+    while (current)
+    {
+        t_link_t *tmp = current;
+        current = current->next;
+        free(tmp);
+        list->size--;
+    }
+    list->first->next = NULL;
+}
+
+void term_list_destroy(t_list_t *list)
+{
+    term_list_clear(list);
+    free(list->first);
+    free(list);
+}
+
 
 /*******************************************************************************
                     Implementation of the Simple Threads API
@@ -64,6 +118,13 @@ int  init() {
   thread_list.last_in_line = NULL;
   thread_list.size = 0; 
 
+  waiting_list.first_in_line = NULL;
+  waiting_list.last_in_line = NULL;
+  waiting_list.size = 0;
+
+  term_list.first = NULL;
+  term_list.last = NULL;
+  term_list.size = 0;
 
   return 1;
 }
@@ -101,6 +162,7 @@ tid_t spawn(void (*start)(), ucontext_t *ctx, ucontext_t *next){
   thread -> tid = tid_global ++;
   thread -> state = ready;
   thread -> ctx = ctx;
+  thread -> next = NULL;
 
   //UPDATE LIST
   if (thread_list.size == 0) {
@@ -120,7 +182,7 @@ tid_t spawn(void (*start)(), ucontext_t *ctx, ucontext_t *next){
   return thread -> tid;
 }  
 
-void yield(){
+void yield(){ 
   // Remember current context
   ucontext_t *temp = thread_list.first_in_line -> ctx;
 
@@ -131,20 +193,12 @@ void yield(){
   
   thread_list.last_in_line->next = thread_list.first_in_line; //  first/running thread is now last in line again
 
-  thread_list.last_in_line->ctx->uc_link = NULL; //update uclink in new last
   //Set first in line to be new last in line
   thread_list.last_in_line = thread_list.first_in_line;
+  thread_list.last_in_line->ctx->uc_link = NULL; //update uclink in new last
   
-  //Update state of next thread
   thread_list.first_in_line = thread_list.first_in_line -> next;
   thread_list.first_in_line -> state = running;
-  /*
-  while (thread_list.first_in_line->state != ready){
-    if (thread_list.first_in_line->next == NULL){
-        done();
-    }
-  }
-  */
 
   if (swapcontext(temp, thread_list.first_in_line->ctx) < 0) {  //&temp, &(&thread_list)->first_in_line->ctx
     perror("swapcontext");
@@ -154,35 +208,119 @@ void yield(){
 }
 
 void  done(){
-  //puts("something was DONE");
-  //free stuff  
+  thread_t *current = waiting_list.first_in_line;
+  thread_t *prev = waiting_list.first_in_line;
+  while (current != NULL){
 
-  //Save thread id 
+    if (current->waiting_for == thread_list.first_in_line->tid) {
+        //Update state of current thread
+        current->state = ready;
+        //Make last in line point to new last in line (currently first in line)
+        thread_list.last_in_line->ctx->uc_link = current->ctx; //update uclink is last
+        
+        thread_list.last_in_line->next = current; //  first/running thread is now last in line again
 
+        //Set first in line to be new last in line
+        thread_list.last_in_line = current;
+        thread_list.last_in_line->ctx->uc_link = NULL; //update uclink in new last
+
+        //Remove from waiting list
+        if (current == waiting_list.first_in_line){
+          waiting_list.first_in_line = NULL;
+          waiting_list.last_in_line = NULL;
+        }
+        else{
+          prev->next = current->next;
+        }
+        waiting_list.size--;
+        thread_list.size++;
+    }
+    prev = current;
+    current = current->next;
+  }
+
+// If no more ready tasks, end
   if (thread_list.size == 0){
     ucontext_t finale_ctx; 
     spawn(finale, &finale_ctx, NULL);
     setcontext(&finale_ctx);
   }
+
   ucontext_t *temp = thread_list.first_in_line -> ctx;
 
   //Update state of current thread
   thread_list.first_in_line->state = terminated;
 
+  thread_t *tempo = thread_list.first_in_line;
+  t_link_t *terminated = malloc(sizeof(t_link_t));
+  terminated->id = tempo->tid;
+  terminated->next = NULL;
+  
+  if (term_list.size == 0) {
+    term_list.first = terminated;
+  }
+  else{
+    term_list.last->next = terminated;
+  }
+
+  term_list.last = terminated;
+  term_list.size++;
+
   //Update state of next thread
   thread_list.first_in_line = thread_list.first_in_line -> next;
   thread_list.first_in_line -> state = running;
-
   thread_list.size --;
-  
-  if (swapcontext(temp, thread_list.first_in_line->ctx) < 0) {  //&temp, &(&thread_list)->first_in_line->ctx
+
+
+  if (swapcontext(temp, thread_list.first_in_line->ctx) < 0) {  
     perror("swapcontext");
     exit(EXIT_FAILURE);
   }
-  //puts("made it to done :D"); 
+  //fprintf(stdout, "%i is first in line after done :)\n", thread_list.first_in_line->tid);
 }
 
 tid_t join(tid_t thread) {
-  return -1;
+  // check if already terminated
+  t_link_t *current = term_list.first;
+  while (current != NULL){
+    if (current->id == thread) {
+      return thread;
+    }
+    current = current->next;
+  }
+
+
+  // Add to wait list and run thread that is next in line
+  thread_list.first_in_line -> state = waiting;
+  thread_list.first_in_line -> waiting_for = thread;
+  
+  thread_t copy = *(thread_list.first_in_line); //copy of numbers that has letter as next
+  copy.next = NULL;
+
+  if (waiting_list.size == 0) {
+    waiting_list.first_in_line = &copy;
+    waiting_list.first_in_line->next = NULL;
+  }
+  else{
+    waiting_list.last_in_line->next = &copy;
+  }
+
+  waiting_list.last_in_line = &copy;
+  waiting_list.last_in_line->next = NULL;
+  waiting_list.size++;
+
+  if (thread_list.first_in_line ==  thread_list.first_in_line -> next){
+    fprintf(stderr, "Deadlock\n");
+    exit(-1);
+    thread_list.first_in_line->next = NULL;
+  }
+  
+  thread_list.first_in_line = thread_list.first_in_line -> next;
+  thread_list.first_in_line -> state = running;
+  thread_list.size--;
+
+  swapcontext(waiting_list.last_in_line->ctx, thread_list.first_in_line->ctx);
+
+  return thread;
 }
  

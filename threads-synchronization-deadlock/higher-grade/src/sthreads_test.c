@@ -18,7 +18,8 @@ void numbers() {
   while (true) {
     printf(" n = %d\n", n);
     n = (n + 1) % (INT_MAX);
-    if (n > 3) done();
+   if (n == 3) join(1);
+   if (n > 10) done();
     yield();
   } 
 }
@@ -30,7 +31,8 @@ void letters() {
 
   while (true) {
       printf(" c = %c\n", c);
-      if (c == 'f') done();
+      //if (c == 'f'){join(0);}
+      if (c == 'z') done();
       yield();
       c = (c == 'z') ? 'a' : c + 1;
     }
@@ -41,7 +43,7 @@ void letters() {
 int fib(int n) {
   switch (n) {
   case 0:
-    return 0;
+    return 0; 
   case 1:
     return 1;
   default:
@@ -69,6 +71,8 @@ void fibonacci_slow() {
     }
     printf(" fib(%02d) = %d\n", n, fib(n));
     n = (n + 1) % INT_MAX;
+    if (n > 20) done();
+    yield();
   }
 }
 
@@ -116,6 +120,8 @@ void magic_numbers() {
       n = 3;
     }
     yield();
+    if (n > 20) join(0);
+    if (n > 30) done();
   }
 }
 
@@ -131,9 +137,13 @@ int main(){
   puts("\n==== Test program for the Simple Threads API ====\n");
   ucontext_t numbers_ctx;
   ucontext_t letters_ctx; 
+  ucontext_t fibonacci_slow_ctx;
+  ucontext_t magic_numbers_ctx;
 
   init(); // Initialization
-  spawn(numbers, &numbers_ctx, &letters_ctx);
+  spawn(numbers, &numbers_ctx, &fibonacci_slow_ctx);
+  spawn(fibonacci_slow, &fibonacci_slow_ctx, &magic_numbers_ctx);
+  spawn(magic_numbers, &magic_numbers_ctx, &letters_ctx);
   spawn(letters, &letters_ctx, NULL);
 
   
