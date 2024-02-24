@@ -15,11 +15,17 @@
 #include <ucontext.h> /* ucontext_t, getcontext(), makecontext(),
                          setcontext(), swapcontext() */
 #include <stdbool.h>  /* true, false */
+#include <string.h>
 
 #include "sthreads.h"
+#include <sys/time.h> // ITIMER_REAL, ITIMER_VIRTUAL, ITIMER_PROF, struct itimerval, setitimer()
+#include <limits.h>   // INT_MAX
 
 /* Stack size for each context. */
 #define STACK_SIZE SIGSTKSZ*100
+
+#define TIMEOUT    50          // ms 
+#define TIMER_TYPE ITIMER_REAL // Type of timer.
 
 /*******************************************************************************
                              Global data structures
@@ -58,6 +64,7 @@ t_list_t term_list;
                       Add internal helper functions here.
 ********************************************************************************/
 
+
 void finale() {
   printf("-------- its over :D ---------\n");
 }
@@ -70,6 +77,7 @@ void list_clear(list_t *list)
         thread_t *tmp = current;
         current = current->next;
         free(tmp);
+        tmp = NULL;
         list->size--;
     }
     list->first_in_line->next = NULL;
@@ -78,8 +86,8 @@ void list_clear(list_t *list)
 void list_destroy(list_t *list)
 {
     list_clear(list);
-    free(list->first_in_line);
     free(list);
+    list = NULL;
 }
 
 void term_list_clear(t_list_t *list)
@@ -90,6 +98,7 @@ void term_list_clear(t_list_t *list)
         t_link_t *tmp = current;
         current = current->next;
         free(tmp);
+        tmp = NULL;
         list->size--;
     }
     list->first->next = NULL;
@@ -98,8 +107,56 @@ void term_list_clear(t_list_t *list)
 void term_list_destroy(t_list_t *list)
 {
     term_list_clear(list);
-    free(list->first);
     free(list);
+    list = NULL;
+}
+
+int timer_signal(int timer_type) {
+  int sig;
+
+  switch (timer_type) {
+    case ITIMER_REAL:
+      sig = SIGALRM;
+      break;
+    case ITIMER_VIRTUAL:
+      sig = SIGVTALRM;
+      break;
+    case ITIMER_PROF:
+      sig = SIGPROF;
+      break;
+    default:
+      fprintf(stderr, "ERROR: unknown timer type %d!\n", timer_type);
+      exit(EXIT_FAILURE);
+  }
+
+  return sig;
+}
+
+void set_timer(int type, void (*handler) (int), int ms) {
+  struct itimerval timer;
+  struct sigaction sa;
+
+  /* Install signal handler for the timer. */
+  memset (&sa, 0, sizeof (sa));
+  sa.sa_handler =  handler;
+  sigaction (timer_signal(type), &sa, NULL);
+
+  /* Configure the timer to expire after ms msec... */
+  timer.it_value.tv_sec = 0;
+  timer.it_value.tv_usec = ms*1000;
+  timer.it_interval.tv_sec = 0;
+  timer.it_interval.tv_usec = 0;
+
+  if (setitimer (type, &timer, NULL) < 0) {
+    perror("Setting timer");
+    exit(EXIT_FAILURE);
+  };
+}
+
+void timer_handler (int signum) {
+  static int count = 0;
+  fprintf (stdout, "======> timer (%03d)\n", count++);
+  yield();
 }
 
 
@@ -108,38 +165,42 @@ void term_list_destroy(t_list_t *list)
 ********************************************************************************/
 
 int  init() {
-  // reset thread id counter 
-  if (tid_global != 0){
-    puts("ERROROROROROR");
-  }
+  /*
+  Sets thread id counter to 0. 
+  Creates linked lists for ready, waiting and terminated threads. 
+  */
+  
+  // Start thread id counter 
   tid_global = 0;
   
+  // Initialize ready linked list
   thread_list.first_in_line = NULL;
   thread_list.last_in_line = NULL;
   thread_list.size = 0; 
 
+  // Initialize waiting linked list
   waiting_list.first_in_line = NULL;
   waiting_list.last_in_line = NULL;
   waiting_list.size = 0;
 
+  // Initialize terminated linked list
   term_list.first = NULL;
   term_list.last = NULL;
   term_list.size = 0;
 
+  // Set timer
+  set_timer(TIMER_TYPE, timer_handler, TIMEOUT);
+
   return 1;
 }
 
-/*
-struct thread
-  tid_t tid;
-  state_t state;
-  ucontext_t ctx; 
-  thread_t *next; can use this to create a linked list of threads 
-*/
-
 tid_t spawn(void (*start)(), ucontext_t *ctx, ucontext_t *next){  
-  //CREATE NEW CONTEXT
-  
+  /*
+  Creates thread and its context. 
+  Updates ready list to include said thread. 
+  */
+
+  //CREATE CONTEXT
   void *stack = malloc(STACK_SIZE);
 
   if (stack == NULL) {
@@ -151,11 +212,10 @@ tid_t spawn(void (*start)(), ucontext_t *ctx, ucontext_t *next){
     perror("getcontext");
     exit(-1);
   }
-  ctx->uc_link            = next;
+  ctx->uc_link           = next;
   ctx->uc_stack.ss_sp    = stack;
   ctx->uc_stack.ss_size  = STACK_SIZE;
   ctx->uc_stack.ss_flags = 0;
-
 
   //CREATE NEW THREAD
   thread_t *thread = malloc(sizeof(thread_t));
@@ -169,16 +229,15 @@ tid_t spawn(void (*start)(), ucontext_t *ctx, ucontext_t *next){
     thread_list.first_in_line = thread;
     thread -> state = running;
   }
-  if ((&thread_list)->size > 0) {
+  else {
     thread_list.last_in_line->next = thread;
   }
+
+  thread_list.last_in_line = thread;
   thread_list.size ++;
 
-  //REPLACE LAST IN LINE WITH NEW THREAD
-  thread_list.last_in_line = thread;
-
   makecontext(ctx, start, 0);
-  //puts("made it to end of spawn :)"); 
+ 
   return thread -> tid;
 }  
 
@@ -200,11 +259,13 @@ void yield(){
   thread_list.first_in_line = thread_list.first_in_line -> next;
   thread_list.first_in_line -> state = running;
 
+  // Reset timer
+  set_timer(TIMER_TYPE, timer_handler, TIMEOUT);
+
   if (swapcontext(temp, thread_list.first_in_line->ctx) < 0) {  //&temp, &(&thread_list)->first_in_line->ctx
     perror("swapcontext");
     exit(EXIT_FAILURE);
   }
-  //puts("made it to yield :D"); 
 }
 
 void  done(){

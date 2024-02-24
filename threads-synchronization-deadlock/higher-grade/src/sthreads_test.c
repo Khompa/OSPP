@@ -1,15 +1,30 @@
-#include <stdlib.h>   // exit(), EXIT_FAILURE, EXIT_SUCCESS
+#include <stdlib.h>   // exit(), EXIT_FAILURE, EXIT_SUCCESS 
 #include <stdio.h>    // printf(), fprintf(), stdout, stderr, perror(), _IOLBF
 #include <stdbool.h>  // true, false
 #include <limits.h>   // INT_MAX
 
 #include "sthreads.h" // init(), spawn(), yield(), done()
+#include <signal.h>
+#include <string.h>
+#include <sys/time.h> // ITIMER_REAL, ITIMER_VIRTUAL, ITIMER_PROF, struct itimerval, setitimer()
+#include <limits.h>   // INT_MAX
+
+#include <unistd.h>    // sleep()
+
+/* Stack size for each context. */
+#define STACK_SIZE SIGSTKSZ*100
+
+#define MAX_SLEEP_TIME  3
+
+#define TIMEOUT    50          // ms 
+#define TIMER_TYPE ITIMER_REAL // Type of timer.
 
 /*******************************************************************************
                    Functions to be used together with spawn()
 
     You may add your own functions or change these functions to your liking.
 ********************************************************************************/
+
 
 /* Prints the sequence 0, 1, 2, .... INT_MAX over and over again.
  */
@@ -20,7 +35,8 @@ void numbers() {
     n = (n + 1) % (INT_MAX);
    if (n == 3) join(1);
    if (n > 10) done();
-    yield();
+   sleep(rand() % MAX_SLEEP_TIME);
+    //yield();
   } 
 }
 
@@ -31,9 +47,10 @@ void letters() {
 
   while (true) {
       printf(" c = %c\n", c);
-      //if (c == 'f'){join(0);}
+      if (c == 'f'){join(0);}
       if (c == 'z') done();
-      yield();
+      sleep(rand() % MAX_SLEEP_TIME);
+      //yield();
       c = (c == 'z') ? 'a' : c + 1;
     }
 }
@@ -71,7 +88,7 @@ void fibonacci_slow() {
     }
     printf(" fib(%02d) = %d\n", n, fib(n));
     n = (n + 1) % INT_MAX;
-    if (n > 20) done();
+    if (n > 200) done();
     yield();
   }
 }
@@ -119,9 +136,9 @@ void magic_numbers() {
       // Start over when m overflows.
       n = 3;
     }
-    yield();
+    //yield();
     if (n > 20) join(0);
-    if (n > 30) done();
+    if (n > 100) done();
   }
 }
 
@@ -133,6 +150,7 @@ void magic_numbers() {
 
 int main(){
   setvbuf(stdout, 0, _IOLBF, 0);
+  setvbuf(stderr, 0, _IOLBF, 0);
   
   puts("\n==== Test program for the Simple Threads API ====\n");
   ucontext_t numbers_ctx;
@@ -146,7 +164,6 @@ int main(){
   spawn(magic_numbers, &magic_numbers_ctx, &letters_ctx);
   spawn(letters, &letters_ctx, NULL);
 
-  
   /* Transfers control to the foo context. */
 
   setcontext(&numbers_ctx);
