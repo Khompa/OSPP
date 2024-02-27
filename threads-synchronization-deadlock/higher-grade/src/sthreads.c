@@ -24,7 +24,7 @@
 /* Stack size for each context. */
 #define STACK_SIZE SIGSTKSZ*100
 
-#define TIMEOUT    50          // ms 
+#define TIMEOUT    10          // ms 
 #define TIMER_TYPE ITIMER_REAL // Type of timer.
 
 /*******************************************************************************
@@ -168,6 +168,7 @@ int  init() {
   /*
   Sets thread id counter to 0. 
   Creates linked lists for ready, waiting and terminated threads. 
+  Sets timer. 
   */
   
   // Start thread id counter 
@@ -242,6 +243,12 @@ tid_t spawn(void (*start)(), ucontext_t *ctx, ucontext_t *next){
 }  
 
 void yield(){ 
+  /*
+  Sets current thread to ready, removes it from first in line and sets it last in line in thread_list. 
+  Sets next in line thread to running and set it to be first in line. 
+  Resets timer. 
+  */
+
   // Remember current context
   ucontext_t *temp = thread_list.first_in_line -> ctx;
 
@@ -271,6 +278,7 @@ void yield(){
 void  done(){
   thread_t *current = waiting_list.first_in_line;
   thread_t *prev = waiting_list.first_in_line;
+  
   while (current != NULL){
 
     if (current->waiting_for == thread_list.first_in_line->tid) {
@@ -300,6 +308,7 @@ void  done(){
     current = current->next;
   }
 
+  thread_list.size --;
 // If no more ready tasks, end
   if (thread_list.size == 0){
     ucontext_t finale_ctx; 
@@ -311,7 +320,9 @@ void  done(){
 
   //Update state of current thread
   thread_list.first_in_line->state = terminated;
-
+  
+  
+  //Save thread_id of terminating thread
   thread_t *tempo = thread_list.first_in_line;
   t_link_t *terminated = malloc(sizeof(t_link_t));
   terminated->id = tempo->tid;
@@ -330,8 +341,6 @@ void  done(){
   //Update state of next thread
   thread_list.first_in_line = thread_list.first_in_line -> next;
   thread_list.first_in_line -> state = running;
-  thread_list.size --;
-
 
   if (swapcontext(temp, thread_list.first_in_line->ctx) < 0) {  
     perror("swapcontext");
@@ -341,6 +350,7 @@ void  done(){
 }
 
 tid_t join(tid_t thread) {
+
   // check if already terminated
   t_link_t *current = term_list.first;
   while (current != NULL){
@@ -370,8 +380,9 @@ tid_t join(tid_t thread) {
   waiting_list.last_in_line->next = NULL;
   waiting_list.size++;
 
+  //Avoid thread linking to itself
   if (thread_list.first_in_line ==  thread_list.first_in_line -> next){
-    fprintf(stderr, "Deadlock\n");
+    fprintf(stdout, "Deadlock\n");
     exit(-1);
     thread_list.first_in_line->next = NULL;
   }
